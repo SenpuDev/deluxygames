@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 import httpx
 import xmltodict
 import asyncio
@@ -28,6 +29,12 @@ if not BGG_TOKEN:
     raise ValueError(
         "BGG_TOKEN is not configured. Please set the BGG_TOKEN environment variable in the 'env' file."
     )
+
+
+@app.get("/")
+async def root():
+    """Redirect root to /docs"""
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/health")
