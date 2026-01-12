@@ -7,7 +7,7 @@ import os
 from dotenv import load_dotenv
 
 # Load environment variables from 'env' file (local development only)
-# In production, Render will use environment variables configured in the dashboard
+# In production, cloud providers will use environment variables configured in their dashboards
 load_dotenv("env", override=False)
 
 app = FastAPI(title="DELUXY - BGG Proxy API")
