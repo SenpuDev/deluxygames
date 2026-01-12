@@ -1,0 +1,19 @@
+name: deluxygames-api
+services:
+  - name: deluxygames
+    source_dir: /
+    github:
+      repo: SenpuDev/deluxygames
+      branch: main
+      deploy_on_push: true
+    run_command: uvicorn main:app --host 0.0.0.0 --port $PORT
+    build_command: pip install -r requirements.txt
+    environment_slug: python
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    http_port: 8080
+    envs:
+      - key: BGG_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+
