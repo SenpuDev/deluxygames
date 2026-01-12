@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: deluxy-bgg-proxy
+    runtime: python
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
+    envVars:
+      - key: BGG_TOKEN
+        sync: false  # Not synchronize from Git, configure manually in Render
+
+
+
