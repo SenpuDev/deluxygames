@@ -1,0 +1,231 @@
+<!-- BGG Games Filter Widget -->
+<!-- Add this to any Shopify page using a Custom HTML section or App Embed -->
+
+<div id="bgg-filter-widget"
+  style="max-width: 1200px; margin: 0 auto; padding: 40px 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: white;">
+  <div style="background: white; padding: 0;">
+    <h2
+      style="margin-top: 0; margin-bottom: 30px; color: #1a1a1a; font-size: 32px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; text-align: center;">
+      FILTER GAMES BY BGG USERNAME
+    </h2>
+
+    <div
+      style="display: flex; gap: 12px; margin-bottom: 30px; max-width: 700px; margin-left: auto; margin-right: auto;">
+      <input type="text" id="bgg-username-input" placeholder="Enter BGG username (e.g., Woodland_Alliance)"
+        style="flex: 1; padding: 14px 18px; border: 2px solid #e0e0e0; border-radius: 4px; font-size: 16px; outline: none; transition: border-color 0.3s; background: white; color: #1a1a1a;"
+        onkeypress="if(event.key === 'Enter') document.getElementById('bgg-search-btn').click()"
+        onfocus="this.style.borderColor='#0066cc'" onblur="this.style.borderColor='#e0e0e0'" />
+      <button id="bgg-search-btn" onclick="searchBGGGames()"
+        style="padding: 14px 32px; background: #0066cc; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; transition: all 0.3s; white-space: nowrap;"
+        onmouseover="this.style.background='#0052a3'; this.style.transform='translateY(-1px)'"
+        onmouseout="this.style.background='#0066cc'; this.style.transform='translateY(0)'">
+        SEARCH
+      </button>
+    </div>
+
+    <div id="bgg-loading" style="display: none; text-align: center; padding: 40px; color: #666;">
+      <div
+        style="display: inline-block; width: 24px; height: 24px; border: 3px solid #f0f0f0; border-top: 3px solid #0066cc; border-radius: 50%; animation: spin 1s linear infinite;">
+      </div>
+      <p style="margin-top: 16px; font-size: 16px; color: #666;">Loading games...</p>
+    </div>
+
+    <div id="bgg-error"
+      style="display: none; padding: 16px; background: #fff3cd; border: 2px solid #ffc107; border-radius: 4px; color: #856404; margin-bottom: 24px; font-weight: 500; max-width: 700px; margin-left: auto; margin-right: auto;">
+    </div>
+
+    <div id="bgg-results" style="display: none; margin-bottom: 40px;">
+      <div style="margin-bottom: 20px; color: #666; font-size: 14px; text-align: center; font-weight: 500;">
+        <span id="bgg-count" style="font-weight: 700; color: #1a1a1a;"></span> games found in BGG collection
+      </div>
+    </div>
+
+    <div id="shopify-collections" style="display: none; margin-top: 50px;">
+      <div style="margin-bottom: 24px; color: #666; font-size: 14px; text-align: center; font-weight: 500;">
+        <span id="collections-count" style="font-weight: 700; color: #1a1a1a;"></span> collections found in store
+      </div>
+      <div id="collections-grid"
+        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 24px; margin-top: 30px;">
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+
+  .collection-card {
+    border: 2px solid #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+    background: white;
+    transition: all 0.3s;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+  }
+
+  .collection-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0, 102, 204, 0.15);
+    border-color: #0066cc;
+  }
+
+  .collection-image {
+    width: 100%;
+    height: 220px;
+    object-fit: cover;
+    background: #f5f5f5;
+    display: block;
+  }
+
+  .collection-info {
+    padding: 16px;
+    background: white;
+  }
+
+  .collection-title {
+    font-weight: 700;
+    color: #1a1a1a;
+    font-size: 14px;
+    margin-bottom: 6px;
+    line-height: 1.4;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .collection-product-count {
+    color: #666;
+    font-size: 12px;
+    font-weight: 500;
+  }
+</style>
+
+<script>
+  // Configuration - Update this with your API URL
+  const BGG_API_URL = 'https://deluxygames-api-kjdib.ondigitalocean.app/get-bgg-games';
+
+  // Get Shopify collections from Liquid (passed from server)
+  // This will be populated by Liquid template
+  let shopifyCollections = [];
+
+  {% for collection in collections %}
+  {% if collection.handle != 'all' %}
+  shopifyCollections.push({
+    id: {{ collection.id }},
+    title: {{ collection.title | json }},
+    handle: {{ collection.handle | json }},
+    url: {{ collection.url | json }},
+    image: {{ collection.featured_image | img_url: '300x300' | default: collection.products.first.featured_image | img_url: '300x300' | json }},
+    product_count: {{ collection.products_count }},
+    bgg_id: {{ collection.metafields.custom.bgg_object_id | default: collection.metafields.custom.bgg_id | default: collection.metafields.bgg.objectid | default: '' | json }}
+      });
+  {% endif %}
+  {% endfor %}
+
+  async function searchBGGGames() {
+    const username = document.getElementById('bgg-username-input').value.trim();
+    const loadingDiv = document.getElementById('bgg-loading');
+    const errorDiv = document.getElementById('bgg-error');
+    const resultsDiv = document.getElementById('bgg-results');
+    const countSpan = document.getElementById('bgg-count');
+    const collectionsDiv = document.getElementById('shopify-collections');
+    const collectionsGrid = document.getElementById('collections-grid');
+    const collectionsCount = document.getElementById('collections-count');
+
+    // Reset UI
+    errorDiv.style.display = 'none';
+    resultsDiv.style.display = 'none';
+    collectionsDiv.style.display = 'none';
+    collectionsGrid.innerHTML = '';
+
+    if (!username) {
+      errorDiv.textContent = 'Please enter a BGG username';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    // Show loading
+    loadingDiv.style.display = 'block';
+
+    try {
+      const response = await fetch(`${BGG_API_URL}?username=${encodeURIComponent(username)}`);
+      const data = await response.json();
+
+      loadingDiv.style.display = 'none';
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to fetch games');
+      }
+
+      if (data.status === 'processing') {
+        errorDiv.textContent = 'BGG is processing the collection. Please try again in a few moments.';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      if (data.status === 'ok' && data.items && data.items.length > 0) {
+        const bggObjectIds = data.items.map(game => game.objectid);
+
+        // Show BGG games count
+        countSpan.textContent = data.count;
+        resultsDiv.style.display = 'block';
+
+        // Filter Shopify collections that match BGG objectids
+        const matchingCollections = shopifyCollections.filter(collection => {
+          const collectionBggId = collection.bgg_id ? String(collection.bgg_id).trim() : '';
+          return collectionBggId && bggObjectIds.includes(collectionBggId);
+        });
+
+        if (matchingCollections.length > 0) {
+          collectionsCount.textContent = matchingCollections.length;
+          collectionsDiv.style.display = 'block';
+
+          matchingCollections.forEach(collection => {
+            const collectionCard = document.createElement('a');
+            collectionCard.href = collection.url;
+            collectionCard.className = 'collection-card';
+            collectionCard.innerHTML = `
+              <img src="${escapeHtml(collection.image || '/no-image.png')}" alt="${escapeHtml(collection.title)}" class="collection-image" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'300\' height=\'300\'%3E%3Crect fill=\'%23f8f9fa\' width=\'300\' height=\'300\'/%3E%3Ctext fill=\'%23999\' font-family=\'sans-serif\' font-size=\'14\' x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dominant-baseline=\'middle\'%3ENo Image%3C/text%3E%3C/svg%3E'">
+              <div class="collection-info">
+                <div class="collection-title">${escapeHtml(collection.title)}</div>
+                <div class="collection-product-count">${collection.product_count} ${collection.product_count === 1 ? 'product' : 'products'}</div>
+              </div>
+            `;
+            collectionsGrid.appendChild(collectionCard);
+          });
+        } else {
+          // Show message if no collections match
+          const noCollectionsMsg = document.createElement('div');
+          noCollectionsMsg.style.padding = '20px';
+          noCollectionsMsg.style.textAlign = 'center';
+          noCollectionsMsg.style.color = '#666';
+          noCollectionsMsg.textContent = 'No collections found matching your BGG collection. Make sure collections have the BGG ID metafield configured.';
+          collectionsGrid.appendChild(noCollectionsMsg);
+          collectionsDiv.style.display = 'block';
+        }
+      } else {
+        errorDiv.textContent = 'No games found for this username.';
+        errorDiv.style.display = 'block';
+      }
+    } catch (error) {
+      loadingDiv.style.display = 'none';
+      errorDiv.textContent = `Error: ${error.message}`;
+      errorDiv.style.display = 'block';
+    }
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+</script>
