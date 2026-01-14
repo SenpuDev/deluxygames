@@ -1,6 +1,3 @@
-<!-- BGG Games Filter Widget -->
-<!-- Add this to any Shopify page using a Custom HTML section or App Embed -->
-
 <div id="bgg-filter-widget"
   style="max-width: 1200px; margin: 0 auto; padding: 40px 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: white;">
   <div style="background: white; padding: 0;">
@@ -119,15 +116,27 @@
 
   {% for collection in collections %}
   {% if collection.handle != 'all' %}
+  {% assign collection_image = '' %}
+  {% if collection.featured_image %}
+  {% assign collection_image = collection.featured_image | img_url: '300x300' %}
+  {% elsif collection.products.first.featured_image %}
+  {% assign collection_image = collection.products.first.featured_image | img_url: '300x300' %}
+  {% endif %}
+  {% assign bgg_id_value = collection.metafields.custom.bgg_object_id %}
+  {% if bgg_id_value == blank %}
+  {% assign bgg_id_value = collection.metafields.custom.bgg_id %}
+  {% endif %}
+  {% if bgg_id_value == blank %}
+  {% assign bgg_id_value = collection.metafields.bgg.objectid %}
+  {% endif %}
   shopifyCollections.push({
     id: {{ collection.id }},
     title: {{ collection.title | json }},
     handle: {{ collection.handle | json }},
     url: {{ collection.url | json }},
-    image: {{ collection.featured_image | img_url: '300x300' | default: collection.products.first.featured_image | img_url: '300x300' | json }},
+    image: {{ collection_image | json }},
     product_count: {{ collection.products_count }},
-    bgg_id: {{ collection.metafields.custom.bgg_object_id | default: collection.metafields.custom.bgg_id | default: collection.metafields.bgg.objectid | default: '' | json }}
-      });
+    bgg_id: {% if bgg_id_value == blank %}null{% elsif bgg_id_value.value %} [{% for item in bgg_id_value.value %}{% if forloop.first == false %}, {% endif %} "{{ item }}"{% endfor %}]{% else %} { { bgg_id_value | json } } {% endif %} });
   {% endif %}
   {% endfor %}
 
@@ -173,17 +182,43 @@
       }
 
       if (data.status === 'ok' && data.items && data.items.length > 0) {
-        const bggObjectIds = data.items.map(game => game.objectid);
+        const bggObjectIds = data.items.map(game => String(game.objectid));
+
+        // Debug: Log BGG IDs from API
+        console.log('BGG Object IDs from API:', bggObjectIds);
+        console.log('Shopify Collections:', shopifyCollections);
 
         // Show BGG games count
         countSpan.textContent = data.count;
         resultsDiv.style.display = 'block';
 
         // Filter Shopify collections that match BGG objectids
+        // Supports both single ID (string) and multiple IDs (array)
         const matchingCollections = shopifyCollections.filter(collection => {
-          const collectionBggId = collection.bgg_id ? String(collection.bgg_id).trim() : '';
-          return collectionBggId && bggObjectIds.includes(collectionBggId);
+          // Debug: Log each collection's bgg_id
+          console.log(`Collection: ${collection.title}, bgg_id:`, collection.bgg_id, 'Type:', typeof collection.bgg_id, 'IsArray:', Array.isArray(collection.bgg_id));
+
+          if (!collection.bgg_id || collection.bgg_id === null || collection.bgg_id === '') {
+            console.log(`  → Skipping ${collection.title}: bgg_id is empty`);
+            return false;
+          }
+
+          // Handle array of IDs (list metafield)
+          if (Array.isArray(collection.bgg_id)) {
+            const collectionIds = collection.bgg_id.map(id => String(id).trim()).filter(id => id !== '');
+            const hasMatch = collectionIds.length > 0 && collectionIds.some(id => bggObjectIds.includes(id));
+            console.log(`  → Array check for ${collection.title}:`, collectionIds, 'Has match:', hasMatch);
+            return hasMatch;
+          }
+
+          // Handle single ID (string metafield)
+          const collectionBggId = String(collection.bgg_id).trim();
+          const hasMatch = collectionBggId && bggObjectIds.includes(collectionBggId);
+          console.log(`  → String check for ${collection.title}:`, collectionBggId, 'Has match:', hasMatch);
+          return hasMatch;
         });
+
+        console.log('Matching collections:', matchingCollections);
 
         if (matchingCollections.length > 0) {
           collectionsCount.textContent = matchingCollections.length;
@@ -193,8 +228,12 @@
             const collectionCard = document.createElement('a');
             collectionCard.href = collection.url;
             collectionCard.className = 'collection-card';
+            const imageUrl = collection.image && collection.image.trim() !== ''
+              ? collection.image
+              : 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'300\' height=\'300\'%3E%3Crect fill=\'%23f5f5f5\' width=\'300\' height=\'300\'/%3E%3Ctext fill=\'%23999\' font-family=\'sans-serif\' font-size=\'14\' x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dominant-baseline=\'middle\'%3ENo Image%3C/text%3E%3C/svg%3E';
+
             collectionCard.innerHTML = `
-              <img src="${escapeHtml(collection.image || '/no-image.png')}" alt="${escapeHtml(collection.title)}" class="collection-image" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'300\' height=\'300\'%3E%3Crect fill=\'%23f8f9fa\' width=\'300\' height=\'300\'/%3E%3Ctext fill=\'%23999\' font-family=\'sans-serif\' font-size=\'14\' x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dominant-baseline=\'middle\'%3ENo Image%3C/text%3E%3C/svg%3E'">
+              <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(collection.title)}" class="collection-image" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'300\' height=\'300\'%3E%3Crect fill=\'%23f5f5f5\' width=\'300\' height=\'300\'/%3E%3Ctext fill=\'%23999\' font-family=\'sans-serif\' font-size=\'14\' x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dominant-baseline=\'middle\'%3ENo Image%3C/text%3E%3C/svg%3E'">
               <div class="collection-info">
                 <div class="collection-title">${escapeHtml(collection.title)}</div>
                 <div class="collection-product-count">${collection.product_count} ${collection.product_count === 1 ? 'product' : 'products'}</div>
